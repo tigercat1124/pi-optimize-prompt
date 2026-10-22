@@ -95,6 +95,15 @@ Files:
 | `LEVELS`, `DEFAULT_LEVEL`, `LOW_MAX_CHARS`, `MIN_CHARS` | constants | Level names, default (`medium`), `low` upper bound (60), lower bound (8). |
 | `SYSTEM` | string | System prompt for the optimizer model. |
 
+## Acknowledgments
+
+The idea for this project was inspired by the prompt optimizer in [Kiro Crew](https://github.com/kirodotdev/KiroCrew). Full credit and respect to the Kiro Crew project and its authors for the original concept. Relevant code in `src/kiro_crew/dashboard/handlers/optimizer.py`:
+
+- [`src/kiro_crew/dashboard/handlers/optimizer.py#L269-L479`](https://github.com/kirodotdev/KiroCrew/blob/788f0217abd4400ca957adc72ed8e60877a254c8/src/kiro_crew/dashboard/handlers/optimizer.py#L269-L479) — `handle_optimize`, the endpoint that rewrites a prompt before it reaches the agent.
+- [`src/kiro_crew/dashboard/handlers/optimizer.py#L211-L264`](https://github.com/kirodotdev/KiroCrew/blob/788f0217abd4400ca957adc72ed8e60877a254c8/src/kiro_crew/dashboard/handlers/optimizer.py#L211-L264) — `OPTIMIZER_SYSTEM`, the system prompt `SYSTEM` in `core.ts` is adapted from.
+- [`src/kiro_crew/dashboard/handlers/optimizer.py#L302-L355`](https://github.com/kirodotdev/KiroCrew/blob/788f0217abd4400ca957adc72ed8e60877a254c8/src/kiro_crew/dashboard/handlers/optimizer.py#L302-L355) — the nonce-tagged payload build `buildPayload` in `core.ts` follows.
+- [`src/kiro_crew/dashboard/handlers/optimizer.py#L78-L118`](https://github.com/kirodotdev/KiroCrew/blob/788f0217abd4400ca957adc72ed8e60877a254c8/src/kiro_crew/dashboard/handlers/optimizer.py#L78-L118) — `_strip_outer_wrapper_tag`, the reply cleanup `cleanReply` in `core.ts` follows.
+
 ## License
 
-Apache-2.0. See `LICENSE`. The system prompt is adapted from [Kiro Crew](https://github.com/kirodotdev/KiroCrew) (Apache-2.0); see `NOTICE`.
+Apache-2.0. See `LICENSE`. The system prompt is adapted from [`OPTIMIZER_SYSTEM`](https://github.com/kirodotdev/KiroCrew/blob/788f0217abd4400ca957adc72ed8e60877a254c8/src/kiro_crew/dashboard/handlers/optimizer.py#L211-L264) in [Kiro Crew](https://github.com/kirodotdev/KiroCrew) (Apache-2.0); see `NOTICE`.
