@@ -3,9 +3,9 @@ import { test } from "node:test";
 import { LOW_MAX_CHARS, buildPayload, classifyInput, cleanReply, isLevel, mentions, parseModelKey } from "./core.ts";
 
 test("classifyInput", () => {
-	assert.equal(classifyInput("authのバグを直して"), "optimize");
+	assert.equal(classifyInput("fix the auth bug"), "optimize");
 	assert.equal(classifyInput("\\ raw text here"), "escape");
-	assert.equal(classifyInput("/var/folders/x/pi-clipboard.png 直して"), "optimize"); // pasted image path is not a command
+	assert.equal(classifyInput("/var/folders/x/pi-clipboard.png fix this"), "optimize"); // pasted image path is not a command
 	for (const t of ["ok", "/model", "!ls -la /tmp", "   short "]) assert.equal(classifyInput(t), "skip");
 });
 

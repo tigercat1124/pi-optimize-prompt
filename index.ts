@@ -7,7 +7,7 @@
  * Any failure falls back to your original text. Config: ~/.pi/agent/optimize-prompt.json
  */
 import { randomBytes } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -17,18 +17,22 @@ const CONFIG_PATH = join(homedir(), ".pi", "agent", "optimize-prompt.json");
 const TIMEOUT_MS = 30_000;
 const SESSION_MODEL = "(current session model)";
 
-type Config = { auto: boolean; model?: string; level: Level };
+export type Config = { auto: boolean; model?: string; level: Level };
 
-function loadConfig(): Config {
+export function loadConfig(path: string = CONFIG_PATH): Config {
 	try {
-		if (existsSync(CONFIG_PATH)) {
-			const c = { auto: true, ...JSON.parse(readFileSync(CONFIG_PATH, "utf8")) };
+		if (existsSync(path)) {
+			const c = { auto: true, ...JSON.parse(readFileSync(path, "utf8")) };
 			return { ...c, level: isLevel(c.level) ? c.level : DEFAULT_LEVEL }; // unknown level falls back to the default
 		}
 	} catch {}
 	return { auto: true, level: DEFAULT_LEVEL };
 }
-const saveConfig = (c: Config) => writeFileSync(CONFIG_PATH, JSON.stringify(c, null, 2));
+const saveConfig = (c: Config) => {
+	const tmp = `${CONFIG_PATH}.${randomBytes(4).toString("hex")}.tmp`; // write+rename so a crash cannot leave a half-written config
+	writeFileSync(tmp, JSON.stringify(c, null, 2));
+	renameSync(tmp, CONFIG_PATH);
+};
 
 function pickModel(ctx: ExtensionContext) {
 	const key = loadConfig().model;
@@ -55,10 +59,7 @@ async function rewrite(ctx: ExtensionContext, draft: string, signal?: AbortSigna
 			{ signal: signal ? AbortSignal.any([signal, timeout]) : timeout },
 		);
 		if (r.stopReason === "aborted" || r.stopReason === "error") return null;
-		const raw = r.content
-			.filter((c): c is { type: "text"; text: string } => c.type === "text")
-			.map((c) => c.text)
-			.join("\n");
+		const raw = r.content.flatMap((c) => (c.type === "text" ? [c.text] : [])).join("\n");
 		return cleanReply(raw, draft, nonce);
 	} catch {
 		return null;
@@ -107,7 +108,9 @@ export default function (pi: ExtensionAPI) {
 		handler: async (args, ctx) => {
 			const c = loadConfig();
 			const a = args.trim();
-			c.auto = a === "on" ? true : a === "off" ? false : !c.auto;
+			if (a === "on") c.auto = true;
+			else if (a === "off") c.auto = false;
+			else c.auto = !c.auto;
 			saveConfig(c);
 			ctx.ui.notify(`Auto-optimize: ${c.auto ? "ON" : "OFF"}`, "info");
 		},
