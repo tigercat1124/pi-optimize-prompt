@@ -22,6 +22,11 @@ test("loadConfig falls back to the default level on an unknown value", () => {
 	assert.deepEqual(loadConfig(path), { auto: false, level: "medium" });
 });
 
+test("loadConfig sanitizes non-boolean auto, non-string model, and mixed exclude", () => {
+	writeFileSync(path, JSON.stringify({ auto: "yes", model: 42, level: "low", exclude: ["^deploy", 7] }));
+	assert.deepEqual(loadConfig(path), { auto: true, level: "low", exclude: ["^deploy"] });
+});
+
 test("loadConfig parses a valid file", () => {
 	writeFileSync(path, JSON.stringify({ auto: false, model: "openrouter/anthropic/claude", level: "high" }));
 	assert.deepEqual(loadConfig(path), { auto: false, model: "openrouter/anthropic/claude", level: "high" });

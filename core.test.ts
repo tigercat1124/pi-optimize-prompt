@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { LOW_MAX_CHARS, buildPayload, classifyInput, cleanReply, isLevel, mentions, parseModelKey } from "./core.ts";
+import { LOW_MAX_CHARS, buildPayload, classifyInput, cleanReply, isLevel, matchesAny, mentions, parseModelKey } from "./core.ts";
 
 test("classifyInput", () => {
 	assert.equal(classifyInput("fix the auth bug"), "optimize");
@@ -21,6 +21,14 @@ test("cleanReply", () => {
 	assert.equal(cleanReply("", "fix", n), null);
 	assert.equal(cleanReply("see @a.ts", "see @b.ts", n), null); // mention changed
 	assert.equal(cleanReply("see @a.ts", "see @a.ts", n), "see @a.ts");
+});
+
+test("matchesAny", () => {
+	assert.equal(matchesAny("fix auth", ["auth", "other"]), true);
+	assert.equal(matchesAny("fix auth", ["^deploy"]), false);
+	assert.equal(matchesAny("fix auth", ["(", "auth"]), true); // invalid regex ignored
+	assert.equal(matchesAny("fix auth", []), false);
+	assert.equal(matchesAny("fix auth"), false);
 });
 
 test("parseModelKey keeps slashes in id", () => {

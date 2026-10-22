@@ -77,6 +77,18 @@ export function classifyInput(text: string, level: Level = DEFAULT_LEVEL): Input
 	return "optimize";
 }
 
+/** True if `text` matches any regex in `patterns`; invalid patterns are ignored. */
+export function matchesAny(text: string, patterns?: readonly string[]): boolean {
+	if (!patterns) return false;
+	return patterns.some((p) => {
+		try {
+			return new RegExp(p).test(text);
+		} catch {
+			return false;
+		}
+	});
+}
+
 /** "provider/model-id" -> [provider, id]; the id may itself contain "/". */
 export function parseModelKey(key: string): [string, string] {
 	const [provider, ...rest] = key.split("/");

@@ -15,6 +15,8 @@ A [pi](https://github.com/earendil-works/pi-coding-agent) extension that rewrite
 
 Every prompt that gets optimized is sent to the optimizer model as an extra request. This costs tokens and shares the prompt text with that model's provider. Choose a cheap model with `/optimize-model`, lower the `level`, or turn auto mode off.
 
+An identical prompt optimized again in the same session reuses the previous rewrite instead of a new request. `/optimize-stats` shows the running request and token count.
+
 ## Usage
 
 | Action | What it does |
@@ -22,6 +24,9 @@ Every prompt that gets optimized is sent to the optimizer model as an extra requ
 | Submit a prompt | Auto mode (default on) optimizes it first. The original text is shown in a notification. |
 | Prefix with `\` | Send the prompt as typed, once. The `\` is removed. |
 | `Alt+O` or `/optimize` | Rewrite the editor text so you can review it before sending. Ignores `level`. |
+| `/optimize-preview` | Show the rewrite in a notification without changing the editor. |
+| `/optimize-undo` | Restore the editor text the last `/optimize` replaced. |
+| `/optimize-stats` | Show this session's optimizer request count, tokens, and estimated cost. |
 | `/optimize-auto [on\|off]` | Toggle auto mode, or set it explicitly. |
 | `/optimize-model` | Pick the optimizer model (default: current session model). |
 | `/optimize-level [low\|medium\|high]` | Set how eagerly auto mode runs. Without an argument, opens a picker. |
@@ -49,6 +54,7 @@ File: `~/.pi/agent/optimize-prompt.json`. Written by the commands above; you can
 | `auto` | boolean | `true` | Optimize on submit. |
 | `model` | string | current session model | `provider/model-id`. The id may contain `/`. |
 | `level` | `"low"` \| `"medium"` \| `"high"` | `"medium"` | See [Levels](#levels). An unknown value falls back to `medium`. |
+| `exclude` | string[] | none | Regex patterns; a prompt matching any of them is never auto-optimized. Invalid patterns are ignored. |
 
 A missing or unreadable file uses the defaults.
 
@@ -73,6 +79,7 @@ Files:
 - `core.ts`: pure helpers, no pi imports, unit-tested.
 - `index.ts`: pi integration (input hook, commands, config file).
 - `core.test.ts`: tests for the helpers.
+- `config.test.ts`: tests for `loadConfig`.
 
 ### `core.ts` API
 
@@ -82,6 +89,7 @@ Files:
 | `cleanReply` | `(raw, draft, nonce) => string \| null` | Strip a copied wrapper tag. Returns `null` when the reply is empty or its `@file` mentions differ from the draft. |
 | `buildPayload` | `(draft, nonce) => string` | Wrap the draft in a per-request tag so it cannot forge a closing tag. |
 | `mentions` | `(s) => string` | Sorted `@path` mentions, used to compare a rewrite with its draft. |
+| `matchesAny` | `(text, patterns?) => boolean` | True when `text` matches any regex; invalid patterns are ignored. Used by `exclude`. |
 | `parseModelKey` | `(key) => [provider, id]` | Split `provider/model-id`. |
 | `isLevel` | `(v) => v is Level` | Validate a level value. |
 | `LEVELS`, `DEFAULT_LEVEL`, `LOW_MAX_CHARS`, `MIN_CHARS` | constants | Level names, default (`medium`), `low` upper bound (60), lower bound (8). |
