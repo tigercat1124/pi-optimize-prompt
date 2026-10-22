@@ -16,13 +16,6 @@ Status as of `v0.1.0` (`main` at `5406513`). All 7 planned steps are done. This 
 3. **Lint warnings:** ~~non-atomic `writeFileSync` in `saveConfig`~~ (now writes a temp file then `renameSync`), ~~nested ternary in `optimize-auto`~~ (now if/else), ~~`filter().map()` in `rewrite`~~ (now `flatMap`). `.sort()` without comparator in `mentions` is left as is (harmless for strings).
 4. **`main` contains a merge commit** (`5406513`). The repo rule "no merge commits" was bypassed by the owner when pushing. Future changes should be rebased or squashed, or the rule will warn again.
 5. **`pi install` was verified only up to the `/optimize-level` picker.** npm install path is now verified end to end; `low`/`high` level behavior and English notifications still unchecked in a live session.
-6. **Real email addresses remain in other public repos** of `tigercat1124` (confirmed via GitHub API, last-100-commits sample): `***REMOVED***` (`deno`, `devin-config`, `devin-realtime-usage`, `hono-htmx`, `mcp-template`, `react-router-v7`), `***REMOVED***` (`node-pnpm-template`, `notion-line-api`), and hostname `***REMOVED***` in `devin-config`. Rewriting history needs `git filter-repo` and a force push; not done on purpose.
-7. **GitHub email privacy settings** (Settings > Emails: "Keep my email addresses private" and "Block command line pushes that expose my email") must be set in the browser. Not confirmed (token lacks `user` scope, so API check is not possible).
-8. ~~**Global git identity**~~ **Resolved:** `~/.gitconfig` already uses the personal address `***REMOVED***`; `~/tiger` no longer exists.
-
-## Cleanup
-
-1. ~~Delete `~/.pi/agent/backup/optimize-prompt-202610222149`~~ **Done:** directory no longer exists.
 
 ## Ideas
 
