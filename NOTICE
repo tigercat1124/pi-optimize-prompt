@@ -1,0 +1,5 @@
+pi-optimize-prompt
+
+The system prompt in core.ts (SYSTEM) is adapted from Kiro Crew
+(https://github.com/kirodotdev/KiroCrew, src/kiro_crew/dashboard/handlers/optimizer.py),
+licensed under the Apache License, Version 2.0.

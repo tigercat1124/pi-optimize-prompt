@@ -1,0 +1,36 @@
+{
+  "name": "pi-optimize-prompt",
+  "version": "0.1.0",
+  "description": "Pi extension that rewrites vague prompts into specific, scoped instructions before they are sent",
+  "type": "module",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tigercat1124/pi-optimize-prompt.git"
+  },
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-coding-agent",
+    "extension",
+    "prompt"
+  ],
+  "files": [
+    "index.ts",
+    "core.ts",
+    "LICENSE",
+    "NOTICE",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test core.test.ts"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}
