@@ -5,7 +5,7 @@ Status as of `v0.1.0` (`main` at `5406513`). All 7 planned steps are done. This 
 ## Open tasks
 
 1. Add the `pi-package` topic to the GitHub repo (repo page, gear icon). Done when: the topic shows on the repo page.
-2. Publish to npm (optional). See `DISTRIBUTION.md`, Option B. Done when: `pi install npm:pi-optimize-prompt@0.1.0` works. **In progress:** `npm publish` needs a 2FA OTP or a granular access token with bypass-2fa; retry with `npm publish --otp=<code>`.
+2. ~~Publish to npm (optional).~~ **Done:** published via npm web-auth flow; `pi install npm:pi-optimize-prompt@0.1.0` verified working (shows in `pi list`).
 3. ~~Replace the 2 Japanese test inputs in `core.test.ts` (lines 6 and 8) with English, or keep them on purpose.~~ **Done:** replaced with English; tests pass.
 4. Try `level` in real use. `LOW_MAX_CHARS = 60` in `core.ts` is a guess. Done when: the value is kept or changed based on use.
 
