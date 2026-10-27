@@ -68,8 +68,8 @@ A missing or unreadable file uses the defaults.
 ## Install
 
 ```sh
-pi install git:github.com/tigercat1124/pi-optimize-prompt@v0.1.0   # from git, pinned to a tag
-pi install npm:pi-optimize-prompt@0.1.0                       # from npm
+pi install git:github.com/tigercat1124/pi-optimize-prompt@v0.3.0   # from git, pinned to a tag
+pi install npm:pi-optimize-prompt@0.3.0                       # from npm
 pi install ./pi-optimize-prompt                               # local checkout
 ```
 
