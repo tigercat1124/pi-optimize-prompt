@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DEFAULT_CONTEXT_CHARS, LOW_MAX_CHARS, MIN_CHARS, resolveContextChars, wantsContext, buildPayload, classifyInput, capContextChars, cleanReply, formatContext, isLevel, mentions, parseModelKey } from "./core.ts";
+import { DEFAULT_CONTEXT_CHARS, LOW_MAX_CHARS, MIN_CHARS, buildPayload, capContextChars, classifyInput, cleanReply, formatContext, isLevel, matchesAny, mentions, parseModelKey, resolveContextChars, wantsContext } from "./core.ts";
 
 test("classifyInput", () => {
-	assert.equal(classifyInput("authのバグを直して"), "optimize");
+	assert.equal(classifyInput("fix the auth bug"), "optimize");
 	assert.equal(classifyInput("\\ raw text here"), "escape");
-	assert.equal(classifyInput("/var/folders/x/pi-clipboard.png 直して"), "optimize"); // pasted image path is not a command
+	assert.equal(classifyInput("/var/folders/x/pi-clipboard.png fix this"), "optimize"); // pasted image path is not a command
 	for (const t of ["ok", "/model", "!ls -la /tmp", "   short "]) assert.equal(classifyInput(t), "skip");
 });
 
@@ -21,6 +21,14 @@ test("cleanReply", () => {
 	assert.equal(cleanReply("", "fix", n), null);
 	assert.equal(cleanReply("see @a.ts", "see @b.ts", n), null); // mention changed
 	assert.equal(cleanReply("see @a.ts", "see @a.ts", n), "see @a.ts");
+});
+
+test("matchesAny", () => {
+	assert.equal(matchesAny("fix auth", ["auth", "other"]), true);
+	assert.equal(matchesAny("fix auth", ["^deploy"]), false);
+	assert.equal(matchesAny("fix auth", ["(", "auth"]), true); // invalid regex ignored
+	assert.equal(matchesAny("fix auth", []), false);
+	assert.equal(matchesAny("fix auth"), false);
 });
 
 test("parseModelKey keeps slashes in id", () => {

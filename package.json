@@ -23,7 +23,8 @@
     "README.md"
   ],
   "scripts": {
-    "test": "node --test core.test.ts"
+    "test": "node --test",
+    "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*"
@@ -32,5 +33,10 @@
     "extensions": [
       "./index.ts"
     ]
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^1.4.0",
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2"
   }
 }

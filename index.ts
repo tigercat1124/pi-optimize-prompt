@@ -8,28 +8,46 @@
  * Any failure falls back to your original text. Config: ~/.pi/agent/optimize-prompt.json
  */
 import { randomBytes } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { CONTEXT_CHOICES, DEFAULT_LEVEL, capContextChars, LEVELS, type Level, SYSTEM, buildPayload, classifyInput, cleanReply, formatContext, isLevel, parseModelKey, resolveContextChars, wantsContext } from "./core.ts";
+import { CONTEXT_CHOICES, DEFAULT_LEVEL, LEVELS, type Level, SYSTEM, buildPayload, capContextChars, classifyInput, cleanReply, formatContext, isLevel, matchesAny, parseModelKey, resolveContextChars, wantsContext } from "./core.ts";
 
 const CONFIG_PATH = join(homedir(), ".pi", "agent", "optimize-prompt.json");
 const TIMEOUT_MS = 30_000;
 const SESSION_MODEL = "(current session model)";
 
-type Config = { auto: boolean; model?: string; level: Level; contextChars?: number };
+export type Config = { auto: boolean; model?: string; level: Level; exclude?: string[]; contextChars?: number };
 
-function loadConfig(): Config {
+export function loadConfig(path: string = CONFIG_PATH): Config {
 	try {
-		if (existsSync(CONFIG_PATH)) {
-			const c = { auto: true, ...JSON.parse(readFileSync(CONFIG_PATH, "utf8")) };
-			return { ...c, level: isLevel(c.level) ? c.level : DEFAULT_LEVEL }; // unknown level falls back to the default
+		if (existsSync(path)) {
+			const parsed = { auto: true, ...JSON.parse(readFileSync(path, "utf8")) } as Record<string, unknown>;
+			const out: Config = {
+				auto: typeof parsed.auto === "boolean" ? parsed.auto : true,
+				level: isLevel(parsed.level) ? parsed.level : DEFAULT_LEVEL, // unknown level falls back to the default
+			};
+			if (typeof parsed.model === "string") out.model = parsed.model;
+			if (Array.isArray(parsed.exclude)) {
+				const e = parsed.exclude.filter((x): x is string => typeof x === "string");
+				if (e.length) out.exclude = e;
+			}
+			return out;
 		}
 	} catch {}
 	return { auto: true, level: DEFAULT_LEVEL };
 }
-const saveConfig = (c: Config) => writeFileSync(CONFIG_PATH, JSON.stringify(c, null, 2));
+const saveConfig = (c: Config) => {
+	const tmp = `${CONFIG_PATH}.${randomBytes(4).toString("hex")}.tmp`; // write+rename so a crash cannot leave a half-written config
+	writeFileSync(tmp, JSON.stringify(c, null, 2));
+	renameSync(tmp, CONFIG_PATH);
+};
+
+const CACHE_MAX = 100; // session-only cache: identical prompts reuse the previous rewrite
+const rewriteCache = new Map<string, string>();
+const stats = { requests: 0, hits: 0, input: 0, output: 0, cost: 0 };
+let lastRewrite: string | undefined; // editor text before the last successful /optimize, for /optimize-undo
 
 function pickModel(ctx: ExtensionContext) {
 	const key = loadConfig().model;
@@ -40,6 +58,11 @@ function pickModel(ctx: ExtensionContext) {
 
 /** Returns the rewritten prompt, or null on any failure / unsafe rewrite (caller keeps the original). */
 async function rewrite(ctx: ExtensionContext, draft: string, signal?: AbortSignal): Promise<string | null> {
+	const cached = rewriteCache.get(draft);
+	if (cached !== undefined) {
+		stats.hits++;
+		return cached;
+	}
 	const model = pickModel(ctx);
 	if (!model) return null;
 	const nonce = randomBytes(6).toString("hex");
@@ -61,32 +84,63 @@ async function rewrite(ctx: ExtensionContext, draft: string, signal?: AbortSigna
 			},
 			{ signal: signal ? AbortSignal.any([signal, timeout]) : timeout },
 		);
+		stats.requests++;
+		stats.input += r.usage.input;
+		stats.output += r.usage.output;
+		stats.cost += r.usage.cost.total;
 		if (r.stopReason === "aborted" || r.stopReason === "error") return null;
-		const raw = r.content
-			.filter((c): c is { type: "text"; text: string } => c.type === "text")
-			.map((c) => c.text)
-			.join("\n");
-		return cleanReply(raw, draft, nonce);
+		const raw = r.content.flatMap((c) => (c.type === "text" ? [c.text] : [])).join("\n");
+		const out = cleanReply(raw, draft, nonce);
+		if (out !== null) {
+			if (rewriteCache.size >= CACHE_MAX) {
+				const oldest = rewriteCache.keys().next().value;
+				if (oldest !== undefined) rewriteCache.delete(oldest);
+			}
+			rewriteCache.set(draft, out);
+		}
+		return out;
 	} catch {
 		return null;
 	}
 }
 
-async function optimizeEditor(ctx: ExtensionContext) {
+/** Rewrite the editor draft; returns null after notifying on empty draft or failure. */
+async function optimizeDraft(ctx: ExtensionContext): Promise<{ draft: string; out: string } | null> {
 	const draft = ctx.ui.getEditorText().trim();
-	if (!draft) return ctx.ui.notify("Editor is empty", "error");
+	if (!draft) {
+		ctx.ui.notify("Editor is empty", "error");
+		return null;
+	}
 	ctx.ui.notify("Optimizing prompt…", "info");
 	const out = await rewrite(ctx, draft);
-	if (!out) return ctx.ui.notify("Optimize failed; original kept", "error");
-	if (out === draft) return ctx.ui.notify("Optimize: no change", "info");
-	ctx.ui.setEditorText(out);
-	ctx.ui.notify("Optimized. Edit and submit.", "info");
+	if (!out) {
+		ctx.ui.notify("Optimize failed; original kept", "error");
+		return null;
+	}
+	return { draft, out };
+}
+
+async function optimizeEditor(ctx: ExtensionContext) {
+	const r = await optimizeDraft(ctx);
+	if (!r) return;
+	if (r.out === r.draft) return ctx.ui.notify("Optimize: no change", "info");
+	lastRewrite = r.draft;
+	ctx.ui.setEditorText(r.out);
+	ctx.ui.notify("Optimized. Edit and submit. (/optimize-undo restores)", "info");
+}
+
+async function previewEditor(ctx: ExtensionContext) {
+	const r = await optimizeDraft(ctx);
+	if (!r) return;
+	ctx.ui.notify(r.out === r.draft ? "Preview: no change" : `Preview:\n${r.out}`, "info");
 }
 
 export default function (pi: ExtensionAPI) {
 	pi.on("input", async (event, ctx) => {
-		if (event.source === "extension" || !loadConfig().auto) return { action: "continue" };
-		const kind = classifyInput(event.text, loadConfig().level);
+		const c = loadConfig();
+		if (event.source === "extension" || !c.auto) return { action: "continue" };
+		if (matchesAny(event.text, c.exclude)) return { action: "continue" };
+		const kind = classifyInput(event.text, c.level);
 		if (kind === "skip") return { action: "continue" };
 		if (kind === "escape")
 			return { action: "transform", text: event.text.replace(/^\s*\\/, ""), images: event.images };
@@ -109,12 +163,40 @@ export default function (pi: ExtensionAPI) {
 	pi.registerCommand("optimize", { description: "Optimize the prompt in the editor", handler: async (_a, ctx) => optimizeEditor(ctx) });
 	pi.registerShortcut("alt+o", { description: "Optimize prompt", handler: optimizeEditor });
 
+	pi.registerCommand("optimize-preview", {
+		description: "Show the optimized prompt without changing the editor",
+		handler: async (_a, ctx) => previewEditor(ctx),
+	});
+
+	pi.registerCommand("optimize-undo", {
+		description: "Restore the editor text replaced by the last /optimize",
+		handler: async (_a, ctx) => {
+			if (lastRewrite === undefined) return ctx.ui.notify("Nothing to undo", "error");
+			ctx.ui.setEditorText(lastRewrite);
+			lastRewrite = undefined;
+			ctx.ui.notify("Restored previous editor text", "info");
+		},
+	});
+
+	pi.registerCommand("optimize-stats", {
+		description: "Show optimizer request and token counts for this session",
+		handler: async (_a, ctx) => {
+			ctx.ui.notify(
+				`Optimize stats: ${stats.requests} requests (${stats.hits} cache hits), ` +
+					`${stats.input} in / ${stats.output} out tokens, ~$${stats.cost.toFixed(4)}`,
+				"info",
+			);
+		},
+	});
+
 	pi.registerCommand("optimize-auto", {
 		description: "Toggle auto-optimize on submit (on|off)",
 		handler: async (args, ctx) => {
 			const c = loadConfig();
 			const a = args.trim();
-			c.auto = a === "on" ? true : a === "off" ? false : !c.auto;
+			if (a === "on") c.auto = true;
+			else if (a === "off") c.auto = false;
+			else c.auto = !c.auto;
 			saveConfig(c);
 			ctx.ui.notify(`Auto-optimize: ${c.auto ? "ON" : "OFF"}`, "info");
 		},

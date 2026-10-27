@@ -20,6 +20,8 @@ The request also includes recent session text (your messages and the assistant's
 
 Context size: the default is 48000 characters (about 32,000 tokens for Japanese, 12,000 for English), billed as input on every optimized prompt. Each message is cut to 1500 characters. The newest messages are kept; when the budget is full, older ones are dropped, so early parts of a long session fall out. The budget is also capped at half the optimizer model's context window in characters.
 
+An identical prompt optimized again in the same session reuses the previous rewrite instead of a new request. `/optimize-stats` shows the running request and token count.
+
 ## Usage
 
 | Action | What it does |
@@ -27,6 +29,9 @@ Context size: the default is 48000 characters (about 32,000 tokens for Japanese,
 | Submit a prompt | Auto mode (default on) optimizes it first. The original text is shown in a notification. |
 | Prefix with `\` | Send the prompt as typed, once. The `\` is removed. |
 | `Alt+O` or `/optimize` | Rewrite the editor text so you can review it before sending. Ignores `level`. |
+| `/optimize-preview` | Show the rewrite in a notification without changing the editor. |
+| `/optimize-undo` | Restore the editor text the last `/optimize` replaced. |
+| `/optimize-stats` | Show this session's optimizer request count, tokens, and estimated cost. |
 | `/optimize-auto [on\|off]` | Toggle auto mode, or set it explicitly. |
 | `/optimize-model` | Pick the optimizer model (default: current session model). |
 | `/optimize-level [low\|medium\|high]` | Set how eagerly auto mode runs. Without an argument, opens a picker. |
@@ -56,6 +61,7 @@ File: `~/.pi/agent/optimize-prompt.json`. Written by the commands above; you can
 | `model` | string | current session model | `provider/model-id`. The id may contain `/`. |
 | `level` | `"low"` \| `"medium"` \| `"high"` | `"medium"` | See [Levels](#levels). An unknown value falls back to `medium`. |
 | `contextChars` | integer >= 0 | `48000` | Max characters of session text sent. `0` sends none. A non-integer or negative value falls back to `48000`. |
+| `exclude` | string[] | none | Regex patterns; a prompt matching any of them is never auto-optimized. Invalid patterns are ignored. |
 
 A missing or unreadable file uses the defaults.
 
@@ -63,7 +69,7 @@ A missing or unreadable file uses the defaults.
 
 ```sh
 pi install git:github.com/tigercat1124/pi-optimize-prompt@v0.1.0   # from git, pinned to a tag
-pi install npm:pi-optimize-prompt@0.1.0                       # from npm, once published
+pi install npm:pi-optimize-prompt@0.1.0                       # from npm
 pi install ./pi-optimize-prompt                               # local checkout
 ```
 
@@ -80,6 +86,7 @@ Files:
 - `core.ts`: pure helpers, no pi imports, unit-tested.
 - `index.ts`: pi integration (input hook, commands, config file).
 - `core.test.ts`: tests for the helpers.
+- `config.test.ts`: tests for `loadConfig`.
 
 ### `core.ts` API
 
@@ -91,6 +98,7 @@ Files:
 | `formatContext` | `(messages, max = 48000) => string` | Keep user and assistant text only, newest first until `max` characters, 1500 per message; returns oldest first. |
 | `capContextChars` | `(want, contextWindowTokens?) => number` | Cap the budget to `contextWindowTokens / 2` characters. |
 | `mentions` | `(s) => string` | Sorted `@path` mentions, used to compare a rewrite with its draft. |
+| `matchesAny` | `(text, patterns?) => boolean` | True when `text` matches any regex; invalid patterns are ignored. Used by `exclude`. |
 | `parseModelKey` | `(key) => [provider, id]` | Split `provider/model-id`. |
 | `isLevel` | `(v) => v is Level` | Validate a level value. |
 | `LEVELS`, `DEFAULT_LEVEL`, `LOW_MAX_CHARS`, `MIN_CHARS` | constants | Level names, default (`medium`), `low` upper bound (60), lower bound (8). |
@@ -99,6 +107,15 @@ Files:
 | `CONTEXT_CHOICES`, `DEFAULT_CONTEXT_CHARS` | constants | Picker values for `/optimize-context`, default (48000). |
 | `SYSTEM` | string | System prompt for the optimizer model. |
 
+## Acknowledgments
+
+The idea for this project was inspired by the prompt optimizer in [Kiro Crew](https://github.com/kirodotdev/KiroCrew). Full credit and respect to the Kiro Crew project and its authors for the original concept. Relevant code in `src/kiro_crew/dashboard/handlers/optimizer.py`:
+
+- [`src/kiro_crew/dashboard/handlers/optimizer.py#L269-L479`](https://github.com/kirodotdev/KiroCrew/blob/788f0217abd4400ca957adc72ed8e60877a254c8/src/kiro_crew/dashboard/handlers/optimizer.py#L269-L479) — `handle_optimize`, the endpoint that rewrites a prompt before it reaches the agent.
+- [`src/kiro_crew/dashboard/handlers/optimizer.py#L211-L264`](https://github.com/kirodotdev/KiroCrew/blob/788f0217abd4400ca957adc72ed8e60877a254c8/src/kiro_crew/dashboard/handlers/optimizer.py#L211-L264) — `OPTIMIZER_SYSTEM`, the system prompt `SYSTEM` in `core.ts` is adapted from.
+- [`src/kiro_crew/dashboard/handlers/optimizer.py#L302-L355`](https://github.com/kirodotdev/KiroCrew/blob/788f0217abd4400ca957adc72ed8e60877a254c8/src/kiro_crew/dashboard/handlers/optimizer.py#L302-L355) — the nonce-tagged payload build `buildPayload` in `core.ts` follows.
+- [`src/kiro_crew/dashboard/handlers/optimizer.py#L78-L118`](https://github.com/kirodotdev/KiroCrew/blob/788f0217abd4400ca957adc72ed8e60877a254c8/src/kiro_crew/dashboard/handlers/optimizer.py#L78-L118) — `_strip_outer_wrapper_tag`, the reply cleanup `cleanReply` in `core.ts` follows.
+
 ## License
 
-Apache-2.0. See `LICENSE`. The system prompt is adapted from [Kiro Crew](https://github.com/kirodotdev/KiroCrew) (Apache-2.0); see `NOTICE`.
+Apache-2.0. See `LICENSE`. The system prompt is adapted from [`OPTIMIZER_SYSTEM`](https://github.com/kirodotdev/KiroCrew/blob/788f0217abd4400ca957adc72ed8e60877a254c8/src/kiro_crew/dashboard/handlers/optimizer.py#L211-L264) in [Kiro Crew](https://github.com/kirodotdev/KiroCrew) (Apache-2.0); see `NOTICE`.
