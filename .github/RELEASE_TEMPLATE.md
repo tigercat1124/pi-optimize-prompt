@@ -2,13 +2,9 @@
 Not read by GitHub automatically. Copy to a file, fill in, then:
   gh release create vX.Y.Z --notes-file <file>
 Replace vX.Y.Z / PREV, delete empty sections, delete this comment.
+The English part is shown as is; only the Japanese part is collapsed in <details>.
 -->
 <a id="top"></a>
-
-<details>
-<summary>English</summary>
-
-[Top](#top)
 
 # vX.Y.Z
 
@@ -28,8 +24,6 @@ Replace vX.Y.Z / PREV, delete empty sections, delete this comment.
 - 
 
 **Full changelog:** `vPREV...vX.Y.Z`
-
-</details>
 
 <details>
 <summary>日本語</summary>
