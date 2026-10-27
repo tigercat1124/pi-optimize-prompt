@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { LOW_MAX_CHARS, buildPayload, classifyInput, cleanReply, isLevel, mentions, parseModelKey } from "./core.ts";
+import { DEFAULT_CONTEXT_CHARS, LOW_MAX_CHARS, MIN_CHARS, resolveContextChars, wantsContext, buildPayload, classifyInput, capContextChars, cleanReply, formatContext, isLevel, mentions, parseModelKey } from "./core.ts";
 
 test("classifyInput", () => {
 	assert.equal(classifyInput("authのバグを直して"), "optimize");
@@ -52,4 +52,33 @@ test("classifyInput levels", () => {
 test("isLevel", () => {
 	assert.ok(isLevel("low") && isLevel("medium") && isLevel("high"));
 	assert.ok(!isLevel("extreme") && !isLevel(undefined));
+});
+
+test("formatContext keeps text turns, drops tool results, keeps newest within budget", () => {
+	const msgs = [
+		{ role: "user", content: "old turn" },
+		{ role: "toolResult", content: [{ type: "text", text: "noise" }] },
+		{ role: "assistant", content: [{ type: "thinking", thinking: "x" }, { type: "text", text: "use FooBar" }] },
+		{ role: "user", content: "latest" },
+	];
+	assert.equal(formatContext(msgs), "user: old turn\n\nassistant: use FooBar\n\nuser: latest");
+	assert.equal(formatContext(msgs, 20), "user: latest");
+	assert.match(buildPayload("d", "n", "ctx"), /^<conversation_context-n>\nctx\n<\/conversation_context-n>\n\n<original_prompt-n>/);
+});
+
+test("capContextChars", () => {
+	assert.equal(capContextChars(24000), 24000);
+	assert.equal(capContextChars(96000, 32000), 16000);
+	assert.equal(capContextChars(6000, 200000), 6000);
+});
+
+test("resolveContextChars falls back to the default for bad values", () => {
+	for (const v of [0, 1, 12000]) assert.equal(resolveContextChars(v), v);
+	for (const v of ["abc", "100", -1, 1.5, NaN, Infinity, null, undefined]) assert.equal(resolveContextChars(v), DEFAULT_CONTEXT_CHARS);
+});
+
+test("wantsContext skips drafts shorter than MIN_CHARS", () => {
+	assert.equal(wantsContext("yes"), false);
+	assert.equal(wantsContext(`  ${"a".repeat(MIN_CHARS - 1)}  `), false);
+	assert.equal(wantsContext("a".repeat(MIN_CHARS)), true);
 });

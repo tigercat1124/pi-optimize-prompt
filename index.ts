@@ -4,6 +4,7 @@
  * - Manual: Alt+O or /optimize rewrites the editor text so you can review before sending.
  * - Model: /optimize-model picks the model (default: current session model).
  * - Level: /optimize-level sets how eagerly auto mode runs: low (short prompts only), medium (default), high (everything but commands).
+ * - Context: recent session text is sent as reference; /optimize-context sets the max chars (default 48000, 0 = none).
  * Any failure falls back to your original text. Config: ~/.pi/agent/optimize-prompt.json
  */
 import { randomBytes } from "node:crypto";
@@ -11,13 +12,13 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { DEFAULT_LEVEL, LEVELS, type Level, SYSTEM, buildPayload, classifyInput, cleanReply, isLevel, parseModelKey } from "./core.ts";
+import { CONTEXT_CHOICES, DEFAULT_LEVEL, capContextChars, LEVELS, type Level, SYSTEM, buildPayload, classifyInput, cleanReply, formatContext, isLevel, parseModelKey, resolveContextChars, wantsContext } from "./core.ts";
 
 const CONFIG_PATH = join(homedir(), ".pi", "agent", "optimize-prompt.json");
 const TIMEOUT_MS = 30_000;
 const SESSION_MODEL = "(current session model)";
 
-type Config = { auto: boolean; model?: string; level: Level };
+type Config = { auto: boolean; model?: string; level: Level; contextChars?: number };
 
 function loadConfig(): Config {
 	try {
@@ -44,12 +45,18 @@ async function rewrite(ctx: ExtensionContext, draft: string, signal?: AbortSigna
 	const nonce = randomBytes(6).toString("hex");
 	const timeout = AbortSignal.timeout(TIMEOUT_MS);
 	try {
+		const context = wantsContext(draft)
+			? formatContext(
+					ctx.sessionManager.getBranch().flatMap((e) => (e.type === "message" ? [e.message] : [])),
+					capContextChars(resolveContextChars(loadConfig().contextChars), model.contextWindow),
+				)
+			: "";
 		const r = await ctx.modelRegistry.complete(
 			model,
 			{
 				systemPrompt: SYSTEM,
 				messages: [
-					{ role: "user", content: [{ type: "text", text: buildPayload(draft, nonce) }], timestamp: Date.now() },
+					{ role: "user", content: [{ type: "text", text: buildPayload(draft, nonce, context) }], timestamp: Date.now() },
 				],
 			},
 			{ signal: signal ? AbortSignal.any([signal, timeout]) : timeout },
@@ -136,6 +143,20 @@ export default function (pi: ExtensionAPI) {
 			c.level = pick as Level;
 			saveConfig(c);
 			ctx.ui.notify(`Optimize level: ${c.level}`, "info");
+		},
+	});
+
+	pi.registerCommand("optimize-context", {
+		description: "Set max session-context chars sent to the optimizer (number, or pick)",
+		handler: async (args, ctx) => {
+			const a = args.trim();
+			const n = Number(a);
+			const pick = a ? n : Number(await ctx.ui.select("Max context chars", CONTEXT_CHOICES.map(String)));
+			if (!Number.isInteger(pick) || pick < 0) return a ? ctx.ui.notify("Usage: /optimize-context <chars, 0 = off>", "error") : undefined;
+			const c = loadConfig();
+			c.contextChars = pick;
+			saveConfig(c);
+			ctx.ui.notify(`Optimizer context: ${pick ? `${pick} chars (capped to the model window)` : "OFF"}`, "info");
 		},
 	});
 }

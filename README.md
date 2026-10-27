@@ -5,6 +5,7 @@ A [pi](https://github.com/earendil-works/pi-coding-agent) extension that rewrite
 - Already-specific prompts are returned unchanged.
 - Any failure (timeout, error, unsafe rewrite) falls back to your original text.
 - `@file` mentions are kept verbatim; a rewrite that changes them is discarded.
+- Recent session text is sent along as reference, so the rewrite keeps your terms, names and decisions.
 
 ## Prerequisites
 
@@ -14,6 +15,10 @@ A [pi](https://github.com/earendil-works/pi-coding-agent) extension that rewrite
 ## Privacy and cost
 
 Every prompt that gets optimized is sent to the optimizer model as an extra request. This costs tokens and shares the prompt text with that model's provider. Choose a cheap model with `/optimize-model`, lower the `level`, or turn auto mode off.
+
+The request also includes recent session text (your messages and the assistant's replies), read from the current session branch on every call. Tool results and thinking are not sent. Anything you pasted earlier in the chat can be sent, to the optimizer model's provider if it differs from your session model. The amount is capped by `/optimize-context`; `0` sends no session text. Drafts shorter than 8 characters (after trimming) are sent without session text. Nothing is stored by the extension; only the settings below are written to disk.
+
+Context size: the default is 48000 characters (about 32,000 tokens for Japanese, 12,000 for English), billed as input on every optimized prompt. Each message is cut to 1500 characters. The newest messages are kept; when the budget is full, older ones are dropped, so early parts of a long session fall out. The budget is also capped at half the optimizer model's context window in characters.
 
 ## Usage
 
@@ -25,6 +30,7 @@ Every prompt that gets optimized is sent to the optimizer model as an extra requ
 | `/optimize-auto [on\|off]` | Toggle auto mode, or set it explicitly. |
 | `/optimize-model` | Pick the optimizer model (default: current session model). |
 | `/optimize-level [low\|medium\|high]` | Set how eagerly auto mode runs. Without an argument, opens a picker. |
+| `/optimize-context [chars]` | Set the max session text sent to the optimizer (0 = none). Without an argument, picks from 6000, 12000, 24000, 48000, 96000. |
 
 Slash commands, `!` shell lines and empty input are never optimized.
 
@@ -49,6 +55,7 @@ File: `~/.pi/agent/optimize-prompt.json`. Written by the commands above; you can
 | `auto` | boolean | `true` | Optimize on submit. |
 | `model` | string | current session model | `provider/model-id`. The id may contain `/`. |
 | `level` | `"low"` \| `"medium"` \| `"high"` | `"medium"` | See [Levels](#levels). An unknown value falls back to `medium`. |
+| `contextChars` | integer >= 0 | `48000` | Max characters of session text sent. `0` sends none. A non-integer or negative value falls back to `48000`. |
 
 A missing or unreadable file uses the defaults.
 
@@ -80,11 +87,16 @@ Files:
 |---|---|---|
 | `classifyInput` | `(text, level = "medium") => "optimize" \| "escape" \| "skip"` | Decide what auto mode does with a submitted prompt. |
 | `cleanReply` | `(raw, draft, nonce) => string \| null` | Strip a copied wrapper tag. Returns `null` when the reply is empty or its `@file` mentions differ from the draft. |
-| `buildPayload` | `(draft, nonce) => string` | Wrap the draft in a per-request tag so it cannot forge a closing tag. |
+| `buildPayload` | `(draft, nonce, context = "") => string` | Wrap the draft, and the session context if given, in per-request tags so neither can forge a closing tag. |
+| `formatContext` | `(messages, max = 48000) => string` | Keep user and assistant text only, newest first until `max` characters, 1500 per message; returns oldest first. |
+| `capContextChars` | `(want, contextWindowTokens?) => number` | Cap the budget to `contextWindowTokens / 2` characters. |
 | `mentions` | `(s) => string` | Sorted `@path` mentions, used to compare a rewrite with its draft. |
 | `parseModelKey` | `(key) => [provider, id]` | Split `provider/model-id`. |
 | `isLevel` | `(v) => v is Level` | Validate a level value. |
 | `LEVELS`, `DEFAULT_LEVEL`, `LOW_MAX_CHARS`, `MIN_CHARS` | constants | Level names, default (`medium`), `low` upper bound (60), lower bound (8). |
+| `resolveContextChars` | `(v) => number` | Return `v` if it is an integer >= 0, else `DEFAULT_CONTEXT_CHARS`. |
+| `wantsContext` | `(draft) => boolean` | `true` when the trimmed draft has at least `MIN_CHARS` (8) characters. |
+| `CONTEXT_CHOICES`, `DEFAULT_CONTEXT_CHARS` | constants | Picker values for `/optimize-context`, default (48000). |
 | `SYSTEM` | string | System prompt for the optimizer model. |
 
 ## License
